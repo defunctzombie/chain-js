@@ -2,7 +2,7 @@
 
 ## Overview
 
-Chain-js is a simple library for chaining javascript async callbacks. The motivation is maily that of syntax appearence when writing async heavy node.js applications. This is nothing more than a way to make one callback "depend" on another
+Chain-js is a simple library for chaining javascript async callbacks. The motivation is mainly that of syntax appearence when writing async heavy node.js applications. This is nothing more than a way to make one callback "depend" on another
 
 Consider the common async callback example:
 
