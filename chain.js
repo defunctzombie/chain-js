@@ -4,7 +4,7 @@
 // no, it isn't a problem because there is only one thread
 // each proxy object saves the previous state and sets it back
 var __next = function() {
-    throw Error("Internal failure!");
+    throw Error('Internal failure!');
 };
 
 // proxy object to maintain state for a single callback
@@ -41,7 +41,7 @@ function Chain(realthis, steps) {
 
     // loop in reverse because we need to give the first items
     // the callback objects of items later in the queue
-    steps.reverse().forEach( function(s) {
+    steps.reverse().forEach(function(s) {
         prev = new Proxy(realthis, s, prev);
     });
 
@@ -52,20 +52,21 @@ function Chain(realthis, steps) {
 // 'static' method to be 'act' as the next callback
 next = function() {
     if (!__next) {
-        throw Error("No next element in the chain.");
+        throw Error('No next element in the chain.');
     }
 
     // bind the variable into local scope
     var bind = __next;
 
-    // if there are multiple invocations of 'next' then increment the proxy object counter
+    // if there are multiple invocations of 'next' then
+    // increment the proxy object counter
     // this allows us to wait on multiple async events to finish
     bind.add();
     return function() {
         // use apply and pass bind again to avoid splitting the arguments
         bind.proc.apply(bind, arguments);
     };
-}
+};
 
 exec = function() {
     var argarr = Array.prototype.slice.call(arguments);
@@ -86,7 +87,7 @@ exec = function() {
 
     // run chain immediately
     return new Chain(realthis, steps);
-}
+};
 
 exports.exec = exec;
 exports.next = next;
