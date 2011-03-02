@@ -17,7 +17,37 @@ function Proxy(realthis, callback, next) {
         queue += 1;
     }
 
+    this.disable = function() {
+        callback = null;
+    }
+
+    // call the callback without incrementing queue
+    this.exec = function() {
+        if (!callback) {
+            return;
+        }
+        var save = __next;
+        __next = next;
+        if (this.catcher) {
+            if (__next)
+                __next.catcher = this.catcher;
+            try {
+                callback.apply(realthis, arguments);
+            } catch (err) {
+                this.disable();
+                this.catcher(err);
+            }
+        } else {
+            callback.apply(realthis, arguments);
+        }
+        __next = save;
+    }
+    
     this.proc = function() {
+        if (!callback) {
+            return;
+        }
+
         queue -= 1;
         if (queue != 0) {
             return;
@@ -27,7 +57,18 @@ function Proxy(realthis, callback, next) {
         // this allows for nesting and other goodness
         var save = __next;
         __next = next;
-        callback.apply(realthis, arguments);
+        if (this.catcher) {
+            if (__next)
+                __next.catcher = this.catcher;
+            try {
+                callback.apply(realthis, arguments);
+            } catch (err) {
+                this.disable();
+                this.catcher(err);
+            }
+        } else {
+            callback.apply(realthis, arguments);
+        }
         __next = save;
     }
 }
@@ -35,8 +76,6 @@ function Proxy(realthis, callback, next) {
 // steps is an array of function callbacks
 function Chain(realthis, steps) {
 
-    // need to use temp object for prev because this is not accessible from
-    // within the foreach loop
     var prev;
 
     // loop in reverse because we need to give the first items
@@ -46,7 +85,16 @@ function Chain(realthis, steps) {
     });
 
     prev.add();
-    prev.proc();
+
+    // start chain execution
+    this.exec = function() {
+        prev.proc();
+    }
+
+    this.catch = function(callback) {
+        prev.catcher = callback;
+        return this;
+    }
 }
 
 // 'static' method to be 'act' as the next callback
@@ -68,7 +116,37 @@ next = function() {
     };
 };
 
-exec = function() {
+/*
+// Multi allows the user to control termination
+function Multi(bind, callback) {
+    this.finish = function() {
+        bind.disable();
+        callback();
+    }
+}
+
+multi = function(finished_callback) {
+    if (!__next) {
+        throw Error('No next element in the chain.');
+    }
+
+    var bind = __next;
+
+    if (finished_callback) {
+        var multi = new Multi(bind, finished_callback);
+        return function() {
+            var args = Array.prototype.slice.call(arguments);
+            bind.exec.apply(bind, [multi, args]);
+        };
+    }
+
+    return function() {
+        bind.exec.apply(bind, arguments);
+    };
+};
+*/
+
+create = function() {
     var argarr = Array.prototype.slice.call(arguments);
 
     if (argarr.length == 0) {
@@ -85,9 +163,16 @@ exec = function() {
     // the callbacks
     var steps = argarr;
 
-    // run chain immediately
+    // return the created chain
     return new Chain(realthis, steps);
 };
 
-exports.exec = exec;
+// backwards compatibility/convenience
+// immedately execute the given chain
+exports.exec = function() {
+    return create.apply(null, arguments).exec();
+}
+
+exports.create = create;
 exports.next = next;
+//exports.multi = multi;
