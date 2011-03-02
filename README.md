@@ -18,7 +18,7 @@ Consider the common async callback example:
 
 This is a pretty common pattern and the nesting quickly gets out of hand, especially if you are already in a callback to begin with. Now, this isn't so much a limitation of doing asyncronous programing as it is a limitation of how you want to express what is happening. In the scenario shown, the callbacks are nested this way because they 'depend' on one another and their execution order matters. With chain this can be re-written to look clearner:
 
-    Chain.exec(
+    Chain.create(
         function() {
             db.open(Chain.next());
         },
@@ -33,11 +33,11 @@ This is a pretty common pattern and the nesting quickly gets out of hand, especi
         function(err, result) {
             ... do something with result
         }
-    );
+    ).exec();
 
 While the number of code lines has increased (an unfortuate side effect of javascript syntax), the flow of execution is more clear to the reader.
 
-Chain is similar to flow-js (willconant/flow-js) and step (github.com/creationix/step) but it has one difference over the others; it does not stomp on your 'this' variable. This allows for Chain to be used inside member functions or passed objects to operate on. Look at the examples section or the test files in the source tree for more complete uses.
+Chain is similar to flow-js (willconant/flow-js) and step (github.com/creationix/step) with the major difference being avoiding the use of 'this' for control flow and added exception handling for the callbacks.
 
 ## Examples
 
@@ -46,7 +46,7 @@ Chain is similar to flow-js (willconant/flow-js) and step (github.com/creationix
 By using more than one next() call, Chain will wait for all the callbacks to finish before triggering the next callback in the chain.
     
     var n = 0;
-    Chain.exec(
+    Chain.create(
         function() {
             setTimeout(Chain.next(), 500);
             setTimeout(Chain.next(), 10);
@@ -54,7 +54,7 @@ By using more than one next() call, Chain will wait for all the callbacks to fin
         function() {
             n++;
         }
-    );
+    ).exec();
 
     // n will only be incremented once
 
@@ -63,10 +63,10 @@ The syntax for mutliple callbacks is the same as single and chain handles the lo
 ### Passing an object to operate on
 
 Chain can also take an object as the first argument. If this is the case, that object will become the 'this' inside of the callbacks. This allows for chain to be used inside of member variables as well being invoked on an arbitraty object.
-    
+
     var testObj = { 'chain': '' };
-    
-    Chain.exec(testObj,
+
+    Chain.create(testObj,
         function() {
             setTimeout(Chain.next(), 10);
             // inside the chain, the 'this' keyword refers to the passed in object
@@ -75,7 +75,7 @@ Chain can also take an object as the first argument. If this is the case, that o
         function() {
             this.chain += "2";
         }
-    );
+    ).exec();
 
     // testObj.chain will be '12' after the second callback finishes
     // notice that testObj was passed in as the first parameter
@@ -87,10 +87,9 @@ By wrapping the exec in a function you can create reusable chains very easily.
 
     var obj1 = { };
     var obj2 = { };
-   
 
     var helloWorld = function(obj) {
-        Chain.exec(obj
+        Chain.create(obj
             function() {
                 setTimeout(Chain.next(), 10);
                 this.str = "hello ";
@@ -98,10 +97,29 @@ By wrapping the exec in a function you can create reusable chains very easily.
             function(arg) {
                 this.str += "world!";
             }
-        );
+        ).exec();
     );
 
     helloWorld(obj1);
     helloWorld(obj2);
 
     // obj1.str and obj2.str now are 'hello world!'
+
+### Error handling
+
+You can connect an error handler to catch any exeptions thrown out of the callbacks
+
+    Chain.create(
+        function() {
+            setTimeout(Chain.next(), 10);
+        },
+        function() {
+            throw Error("example error");
+        }
+    ).catch(function(err) {
+        console.log("Caught: ", err);
+    }).exec();
+
+Just putting a try/catch block around the entire Chain will not work because the entire chain creation code is executed and will return before the first callback is called. Thus you will be in another frame of execution and not your current stack if any callback throws. However, by attaching a function to handle the error in this way, each callback is called within a try catch block and you can handle any error in one location.
+
+
