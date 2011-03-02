@@ -1,0 +1,6 @@
+{
+    "name": "chain",
+    "description": "javascript ascync sequencing library",
+    "version": "0.0.1",
+    "main": "./chain.js"
+}
