@@ -11,38 +11,31 @@ var __next = function() {
 // tracks counters for multi async events
 function Proxy(chain_obj, callback, next) {
     var queue = 0;
+    var self = this;
 
-    this.add = function() {
+    self._error_handler;
+
+    self.add = function() {
         queue += 1;
     }
 
-    this.disable = function() {
-        callback = null;
+    self.disable = function() {
+        self.error_handler = null;
     }
 
-    // call the callback without incrementing queue
-    this.exec = function() {
-        if (!callback) {
-            return;
-        }
-        var save = __next;
-        __next = next;
-        if (this.catcher) {
-            if (__next)
-                __next.catcher = this.catcher;
-            try {
-                callback.apply(chain_obj, arguments);
-            } catch (err) {
-                this.disable();
-                this.catcher(err);
+    Object.defineProperty(this, 'error_handler', {
+        get: function() {
+            return self._error_handler;
+        },
+        set: function(cb) {
+            self._error_handler = cb;
+            if (next) {
+                next.error_handler = cb;
             }
-        } else {
-            callback.apply(chain_obj, arguments);
-        }
-        __next = save;
-    }
+        },
+    });
 
-    this.proc = function() {
+    self.proc = function() {
         if (!callback) {
             return;
         }
@@ -52,22 +45,37 @@ function Proxy(chain_obj, callback, next) {
             return;
         }
 
-        // store the current dummy to set it back
-        // this allows for nesting and other goodness
         var save = __next;
         __next = next;
-        if (this.catcher) {
-            if (__next)
-                __next.catcher = this.catcher;
-            try {
-                callback.apply(chain_obj, arguments);
-            } catch (err) {
-                this.disable();
-                this.catcher(err);
+
+        var args = Array.prototype.slice.call(arguments);
+
+        if (self.error_handler) {
+            // mungle first argument
+            var error = args.shift();
+
+            // if it was an error, call error handler
+            if (error && error instanceof Error) {
+                return self.error_handler.call(chain_obj, error);
             }
-        } else {
-            callback.apply(chain_obj, arguments);
         }
+
+        try {
+            callback.apply(chain_obj, args);
+        } catch (err) {
+
+            // put back the next callback
+            __next = save;
+
+            self.disable();
+            if (self.error_handler) {
+                return self.error_handler.call(chain_obj, err);
+            }
+
+            // no error handler, rethrow
+            throw err;
+        }
+
         __next = save;
     }
 }
@@ -91,7 +99,7 @@ function Chain(steps) {
     }
 
     self.error = function(callback) {
-        prev.catcher = callback;
+        prev.error_handler = callback;
         return this;
     }
 }
@@ -131,7 +139,8 @@ var define = function() {
 
     func_proc.error = function(cb) {
         // define error on the chain object
-        return chain.error(cb);
+        chain.error(cb);
+        return func_proc;
     };
 
     // achieve () execution by returning a function

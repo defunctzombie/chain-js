@@ -137,3 +137,37 @@ test('reuse', function(done) {
     });
 });
 
+// no error handler
+test('error', function(done) {
+    chain(
+        function() {
+            setTimeout(chain.next(), 10, new Error('test error'));
+        },
+        function(err) {
+            assert.equal(err.message, 'test error');
+            done();
+        }
+    )
+});
+
+// test having an error handler
+test('error-handler', function(done) {
+    chain.define(
+        function() {
+            setTimeout(chain.next(), 5, null, 'result');
+        },
+        function(result) {
+            // when we have an error handler, it consumes the first arg
+            assert.equal('result', result);
+
+            setTimeout(chain.next(), 5, new Error('test error'));
+        },
+        function() {
+            // should never get here
+            assert.equal(false, true);
+        }
+    ).error(function(err) {
+        assert.equal(err.message, 'test error');
+        done();
+    })();
+});
