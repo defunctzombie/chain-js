@@ -1,6 +1,12 @@
 {
     "name": "chain",
     "description": "javascript ascync sequencing library",
-    "version": "0.0.1",
-    "main": "./chain.js"
+    "version": "1.0.0",
+    "main": "./chain.js",
+    "scripts": {
+        "test": "node test/run.js"
+    },
+    "devDependencies": {
+        "mocha": "*"
+    }
 }

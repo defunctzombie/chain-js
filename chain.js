@@ -1,6 +1,6 @@
 
 // internal private state
-// yes, it is global
+// yes, it is global (to the module)
 // no, it isn't a problem because there is only one thread
 // each proxy object saves the previous state and sets it back
 var __next = function() {
@@ -9,9 +9,8 @@ var __next = function() {
 
 // proxy object to maintain state for a single callback
 // tracks counters for multi async events
-function Proxy(realthis, callback, next) {
+function Proxy(chain_obj, callback, next) {
     var queue = 0;
-    this.realthis = realthis;
 
     this.add = function() {
         queue += 1;
@@ -32,17 +31,17 @@ function Proxy(realthis, callback, next) {
             if (__next)
                 __next.catcher = this.catcher;
             try {
-                callback.apply(realthis, arguments);
+                callback.apply(chain_obj, arguments);
             } catch (err) {
                 this.disable();
                 this.catcher(err);
             }
         } else {
-            callback.apply(realthis, arguments);
+            callback.apply(chain_obj, arguments);
         }
         __next = save;
     }
-    
+
     this.proc = function() {
         if (!callback) {
             return;
@@ -61,37 +60,37 @@ function Proxy(realthis, callback, next) {
             if (__next)
                 __next.catcher = this.catcher;
             try {
-                callback.apply(realthis, arguments);
+                callback.apply(chain_obj, arguments);
             } catch (err) {
                 this.disable();
                 this.catcher(err);
             }
         } else {
-            callback.apply(realthis, arguments);
+            callback.apply(chain_obj, arguments);
         }
         __next = save;
     }
 }
 
 // steps is an array of function callbacks
-function Chain(realthis, steps) {
+function Chain(steps) {
 
+    var self = this;
     var prev;
 
     // loop in reverse because we need to give the first items
     // the callback objects of items later in the queue
     steps.reverse().forEach(function(s) {
-        prev = new Proxy(realthis, s, prev);
+        prev = new Proxy(self, s, prev);
     });
 
-    prev.add();
-
     // start chain execution
-    this.exec = function() {
-        prev.proc();
+    self.exec = function() {
+        prev.add();
+        prev.proc.apply(prev, arguments);
     }
 
-    this.catch = function(callback) {
+    self.error = function(callback) {
         prev.catcher = callback;
         return this;
     }
@@ -116,63 +115,33 @@ next = function() {
     };
 };
 
-/*
-// Multi allows the user to control termination
-function Multi(bind, callback) {
-    this.finish = function() {
-        bind.disable();
-        callback();
+var define = function() {
+    var steps = Array.prototype.slice.call(arguments);
+
+    if (steps.length == 0) {
+        throw new Error('cannot define a chain with no steps');
     }
-}
-
-multi = function(finished_callback) {
-    if (!__next) {
-        throw Error('No next element in the chain.');
-    }
-
-    var bind = __next;
-
-    if (finished_callback) {
-        var multi = new Multi(bind, finished_callback);
-        return function() {
-            var args = Array.prototype.slice.call(arguments);
-            bind.exec.apply(bind, [multi, args]);
-        };
-    }
-
-    return function() {
-        bind.exec.apply(bind, arguments);
-    };
-};
-*/
-
-create = function() {
-    var argarr = Array.prototype.slice.call(arguments);
-
-    if (argarr.length == 0) {
-        return;
-    }
-
-    // if the first argument is an object, then use that for the 'this'
-    // to all the callbacks, otherwise, no 'this' needed
-    var realthis = null;
-    if (typeof argarr[0] == 'object') {
-        realthis = argarr.shift();
-    }
-
-    // the callbacks
-    var steps = argarr;
 
     // return the created chain
-    return new Chain(realthis, steps);
+    var chain = new Chain(steps);
+
+    var func_proc = function() {
+        chain.exec.apply(chain, arguments);
+    };
+
+    func_proc.error = function(cb) {
+        // define error on the chain object
+        return chain.error(cb);
+    };
+
+    // achieve () execution by returning a function
+    return func_proc;
 };
 
-// backwards compatibility/convenience
-// immedately execute the given chain
-exports.exec = function() {
-    return create.apply(null, arguments).exec();
-}
+// immediate execution
+module.exports = function() {
+    return define.apply(null, arguments)();
+};
 
-exports.create = create;
-exports.next = next;
-//exports.multi = multi;
+module.exports.define = define;
+module.exports.next = next;
